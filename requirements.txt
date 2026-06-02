@@ -1,0 +1,6 @@
+certstream
+dnstwist
+scikit-learn
+python-dotenv
+requests
+Levenshtein
