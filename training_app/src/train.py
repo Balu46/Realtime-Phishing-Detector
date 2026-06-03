@@ -28,42 +28,87 @@ def load_dummy_data():
     y = np.array([0, 0, 0, 1, 1, 1])
     return X, y
 
-def load_phishtank_data():
-    """
-    To use PhishTank, you should register at:
-    https://www.phishtank.com/developer_info.php
-    to get an API key. 
+def load_public_datasets():
+    import requests
+    import zipfile
+    import io
+    from urllib.parse import urlparse
+    from shared.feature_extraction import FeatureExtractor
     
-    You can download the database (e.g. JSON or CSV format) from:
-    http://data.phishtank.com/data/<YOUR_API_KEY>/online-valid.csv
+    logger.info("Downloading public datasets (OpenPhish for malicious, Tranco for benign)...")
     
-    For benign domains, you can use Tranco list:
-    https://tranco-list.eu/
-    """
-    logger.info("Loading PHISHTANK dataset...")
-    api_key = os.environ.get("PHISHTANK_API_KEY")
-    if not api_key:
-        logger.warning("PHISHTANK_API_KEY is not set in environment variables.")
-        logger.warning("Please get an API key at https://www.phishtank.com/developer_info.php")
-        logger.info("Falling back to dummy data for demonstration...")
+    target_brands = ['paypal', 'societegenerale', 'bankofamerica', 'apple', 'microsoft', 'google', 'facebook', 'amazon']
+    extractor = FeatureExtractor(target_brands)
+    
+    X = []
+    y = []
+    
+    # 1. OpenPhish (Malicious)
+    try:
+        logger.info("Downloading OpenPhish feed...")
+        r = requests.get('https://openphish.com/feed.txt', timeout=10)
+        urls = r.text.strip().split('\n')
+        domains = set()
+        for url in urls:
+            try:
+                domain = urlparse(url).netloc
+                if domain:
+                    domains.add(domain)
+            except:
+                pass
+                
+        logger.info(f"Extracted {len(domains)} malicious domains from OpenPhish.")
+        for domain in domains:
+            X.append(extractor.extract_features(domain))
+            y.append(1) # 1 = Phishing
+    except Exception as e:
+        logger.error(f"Failed to download OpenPhish: {e}")
+
+    # 2. Tranco (Benign)
+    try:
+        logger.info("Downloading Tranco Top 1M list (this might take a moment)...")
+        # Downloading a recent Tranco list
+        r = requests.get('https://tranco-list.eu/top-1m.csv.zip', timeout=30)
+        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+            # Usually there is only one csv file inside
+            csv_filename = z.namelist()[0]
+            with z.open(csv_filename) as f:
+                # Read only the first N lines to balance the dataset
+                n_benign_to_read = max(len(X) * 2, 1000) # get at least 1000, or 2x the phishing samples
+                logger.info(f"Extracting top {n_benign_to_read} benign domains from Tranco...")
+                count = 0
+                for line in f:
+                    if count >= n_benign_to_read:
+                        break
+                    # Format is usually "rank,domain"
+                    parts = line.decode('utf-8').strip().split(',')
+                    if len(parts) >= 2:
+                        domain = parts[1]
+                        X.append(extractor.extract_features(domain))
+                        y.append(0) # 0 = Benign
+                        count += 1
+                        
+        logger.info(f"Extracted {count} benign domains from Tranco.")
+    except Exception as e:
+        logger.error(f"Failed to download Tranco: {e}")
+
+    if not X:
+        logger.warning("Failed to load public datasets. Falling back to dummy data.")
         return load_dummy_data()
-    
-    # Example logic to load from actual downloaded CSVs
-    logger.info("PhishTank API Key found! Here you would load the CSV and extract features using FeatureExtractor.")
-    # For now, returning dummy data as a placeholder until the real dataset is downloaded.
-    return load_dummy_data()
+
+    logger.info(f"Public dataset loaded successfully: {len(X)} total samples.")
+    return np.array(X), np.array(y)
 
 def load_csv_data(csv_path):
+    # (Left unchanged as stub for manual files if needed, but we now have public datasets)
     logger.info(f"Loading CSV dataset from {csv_path}...")
-    # TODO: Load CSV, extract features for each domain using src.analysis.feature_extraction
-    # return X, y
     return load_dummy_data()
 
 def train_model(dataset_source, csv_path=None):
     if dataset_source == 'dummy':
         X, y = load_dummy_data()
-    elif dataset_source == 'phishtank':
-        X, y = load_phishtank_data()
+    elif dataset_source == 'public':
+        X, y = load_public_datasets()
     elif dataset_source == 'csv':
         X, y = load_csv_data(csv_path)
     else:
@@ -81,7 +126,7 @@ def train_model(dataset_source, csv_path=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train the Phishing Detection ML Model")
-    parser.add_argument('--dataset', type=str, choices=['dummy', 'phishtank', 'csv'], default='dummy',
+    parser.add_argument('--dataset', type=str, choices=['dummy', 'public', 'csv'], default='dummy',
                         help="Choose the dataset source for training.")
     parser.add_argument('--csv-path', type=str, default=None,
                         help="Path to the CSV file if dataset is 'csv'.")

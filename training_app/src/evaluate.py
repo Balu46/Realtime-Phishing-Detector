@@ -41,5 +41,5 @@ def evaluate_system(csv_file):
 
 if __name__ == '__main__':
     import os
-    csv_path = os.path.join(os.path.dirname(__file__), '..', 'phishing_results.csv')
+    csv_path = "/home/jan/Informatyka/Studia/cyber/CT_logs/results/phishing_results.csv"
     evaluate_system(csv_path)
