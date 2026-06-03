@@ -4,9 +4,10 @@ import sys
 
 # Add the src directory to the python path so modules can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from analysis.heuristics import HeuristicsAnalyzer
-from analysis.feature_extraction import FeatureExtractor
+from shared.feature_extraction import FeatureExtractor
 from config import Config
 
 class TestHeuristicsAndExtraction(unittest.TestCase):

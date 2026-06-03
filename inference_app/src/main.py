@@ -1,17 +1,19 @@
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 import time
 import queue
 import logging
 import argparse
 import csv
-import os
 from datetime import datetime
 from config import Config
 from ingestion.certstream_client import CertstreamListener
 from ingestion.mock_certstream import MockCertstreamListener
 from ingestion.urlscan_client import UrlScanListener
 from analysis.heuristics import HeuristicsAnalyzer
-from analysis.feature_extraction import FeatureExtractor
+from shared.feature_extraction import FeatureExtractor
 from ml.model import PhishingDetectorModel
 from threat_intel.virustotal import VirusTotalClient
 from threat_intel.google_safe_browsing import SafeBrowsingClient
@@ -63,7 +65,10 @@ def main():
     logger.info("Press Ctrl+C to stop.")
 
     # Setup CSV logging
-    csv_filename = "phishing_results.csv"
+    results_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'results'))
+    os.makedirs(results_dir, exist_ok=True)
+    csv_filename = os.path.join(results_dir, "phishing_results.csv")
+    
     file_exists = os.path.isfile(csv_filename)
     csv_file = open(csv_filename, "a", newline="", encoding="utf-8")
     csv_writer = csv.writer(csv_file)

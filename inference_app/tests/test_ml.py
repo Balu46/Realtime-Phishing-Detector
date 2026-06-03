@@ -1,13 +1,23 @@
 import unittest
 import os
 import sys
+import os
 
+# Add inference_app/src, training_app/src, and project root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'training_app', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from ml.model import PhishingDetectorModel
-from analysis.feature_extraction import FeatureExtractor
+from train import train_model
+from shared.feature_extraction import FeatureExtractor
 
 class TestMLModel(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Ensure a model exists for testing
+        train_model('dummy')
+
     def setUp(self):
         self.model = PhishingDetectorModel()
         self.extractor = FeatureExtractor(['paypal', 'apple'])
