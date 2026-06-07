@@ -70,13 +70,18 @@ def main():
     csv_filename = os.path.join(results_dir, "phishing_results.csv")
     
     file_exists = os.path.isfile(csv_filename)
-    csv_file = open(csv_filename, "a", newline="", encoding="utf-8")
-    csv_writer = csv.writer(csv_file)
-    if not file_exists:
-        csv_writer.writerow(["Timestamp", "Domain", "Is_Phishing_Heuristics", "Is_Phishing_ML", "VirusTotal_Result", "SafeBrowsing_Result"])
+    csv_file = None
+    
+    import concurrent.futures
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
 
     processed_count = 0
     try:
+        csv_file = open(csv_filename, "a", newline="", encoding="utf-8")
+        csv_writer = csv.writer(csv_file)
+        if not file_exists:
+            csv_writer.writerow(["Timestamp", "Domain", "Is_Phishing_Heuristics", "Is_Phishing_ML", "VirusTotal_Result", "SafeBrowsing_Result"])
+
         while True:
             try:
                 # Block until a domain is available in the queue
@@ -109,20 +114,23 @@ def main():
                     logger.info(f"Features: {extractor.extract_features_dict(domain)}")
                     
                     # --- Phase 3: Threat Intelligence Validation ---
-                    # Optional: Verify with VirusTotal or GSB if available
-                    vt_res = vt_client.check_domain(domain)
-                    if vt_res is True:
-                        logger.critical(f"💀 CONFIRMED MALICIOUS on VirusTotal: {domain}")
-                    elif vt_res is False:
-                        logger.info(f"VirusTotal considers it safe (for now): {domain}")
-                        
-                    gsb_res = gsb_client.check_domain(domain)
-                    if gsb_res is True:
-                        logger.critical(f"💀 CONFIRMED MALICIOUS on Google Safe Browsing: {domain}")
+                    # Execute asynchronously to avoid blocking the main domain ingestion loop
+                    def check_threat_intel(dom):
+                        vt_res = vt_client.check_domain(dom)
+                        if vt_res is True:
+                            logger.critical(f"💀 CONFIRMED MALICIOUS on VirusTotal: {dom}")
+                        elif vt_res is False:
+                            logger.info(f"VirusTotal considers it safe (for now): {dom}")
+                            
+                        gsb_res = gsb_client.check_domain(dom)
+                        if gsb_res is True:
+                            logger.critical(f"💀 CONFIRMED MALICIOUS on Google Safe Browsing: {dom}")
+
+                    executor.submit(check_threat_intel, domain)
             
-            # Log every single domain to CSV
+            # Log every single domain to CSV (without synchronous VT/GSB results to avoid blocking)
             timestamp = datetime.now().isoformat()
-            csv_writer.writerow([timestamp, domain, heuristics_match, ml_match, vt_res, gsb_res])
+            csv_writer.writerow([timestamp, domain, heuristics_match, ml_match, "", ""])
             csv_file.flush() # Ensure it's saved to disk immediately
                     
             domain_queue.task_done()
@@ -131,7 +139,9 @@ def main():
         logger.info("Shutting down...")
     finally:
         listener.stop()
-        csv_file.close()
+        if csv_file:
+            csv_file.close()
+        executor.shutdown(wait=False)
         logger.info("System stopped.")
 
 if __name__ == "__main__":

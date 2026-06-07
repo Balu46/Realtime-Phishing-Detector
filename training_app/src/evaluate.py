@@ -20,8 +20,19 @@ def evaluate_system(csv_file):
             heuristics = row['Is_Phishing_Heuristics'].strip().lower() == 'true'
             ml = row['Is_Phishing_ML'].strip().lower() == 'true'
 
+            # Use VirusTotal and Google Safe Browsing as dynamic ground truth
+            vt_res = row.get('VirusTotal_Result', '').strip().lower()
+            gsb_res = row.get('SafeBrowsing_Result', '').strip().lower()
+            
             # Assign ground truth
-            actual = ground_truth.get(domain, False)
+            if domain in ground_truth:
+                actual = ground_truth[domain]
+            elif vt_res == 'true' or gsb_res == 'true':
+                actual = True
+            elif vt_res == 'false' or gsb_res == 'false':
+                actual = False
+            else:
+                actual = False # Default to benign if unknown
 
             y_true.append(actual)
             y_heuristics.append(heuristics)
@@ -41,5 +52,9 @@ def evaluate_system(csv_file):
 
 if __name__ == '__main__':
     import os
-    csv_path = "/home/jan/Informatyka/Studia/cyber/CT_logs/results/phishing_results.csv"
-    evaluate_system(csv_path)
+    csv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'results', 'phishing_results.csv'))
+    
+    if os.path.exists(csv_path):
+        evaluate_system(csv_path)
+    else:
+        print(f"Results CSV not found: {csv_path}")

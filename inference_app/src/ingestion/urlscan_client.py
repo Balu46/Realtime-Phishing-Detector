@@ -17,7 +17,7 @@ class UrlScanListener:
         self.domain_queue = domain_queue
         self._stop_event = threading.Event()
         self._thread = None
-        self.seen_domains = set()
+        self.seen_domains = {}  # Using dict as an ordered set
 
     def start(self) -> None:
         logger.info("Starting UrlScanListener (Reliable alternative to CertStream)...")
@@ -36,12 +36,12 @@ class UrlScanListener:
                         for result in data.get("results", []):
                             domain = result.get("task", {}).get("domain")
                             if domain and domain not in self.seen_domains:
-                                self.seen_domains.add(domain)
+                                self.seen_domains[domain] = None
                                 self.domain_queue.put(domain)
                                 
-                                # Keep set size manageable
+                                # Keep size manageable by removing oldest
                                 if len(self.seen_domains) > 10000:
-                                    self.seen_domains.clear()
+                                    self.seen_domains.pop(next(iter(self.seen_domains)))
                                     
                 except Exception as e:
                     logger.error(f"Error fetching from URLScan: {e}")

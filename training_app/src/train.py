@@ -35,9 +35,11 @@ def load_public_datasets():
     from urllib.parse import urlparse
     from shared.feature_extraction import FeatureExtractor
     
+    from inference_app.src.config import Config
+    
     logger.info("Downloading public datasets (OpenPhish for malicious, Tranco for benign)...")
     
-    target_brands = ['paypal', 'societegenerale', 'bankofamerica', 'apple', 'microsoft', 'google', 'facebook', 'amazon']
+    target_brands = Config.TARGET_BRANDS
     extractor = FeatureExtractor(target_brands)
     
     X = []
@@ -92,17 +94,54 @@ def load_public_datasets():
     except Exception as e:
         logger.error(f"Failed to download Tranco: {e}")
 
-    if not X:
-        logger.warning("Failed to load public datasets. Falling back to dummy data.")
+    if not X or len(set(y)) < 2:
+        logger.warning("Failed to load public datasets with both classes. Falling back to dummy data.")
         return load_dummy_data()
 
     logger.info(f"Public dataset loaded successfully: {len(X)} total samples.")
     return np.array(X), np.array(y)
 
 def load_csv_data(csv_path):
-    # (Left unchanged as stub for manual files if needed, but we now have public datasets)
+    import csv
+    from shared.feature_extraction import FeatureExtractor
+    from inference_app.src.config import Config
+    
     logger.info(f"Loading CSV dataset from {csv_path}...")
-    return load_dummy_data()
+    
+    if not csv_path or not os.path.exists(csv_path):
+        logger.warning(f"CSV file not found: {csv_path}. Falling back to dummy.")
+        return load_dummy_data()
+        
+    X, y = [], []
+    extractor = FeatureExtractor(Config.TARGET_BRANDS)
+    
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if 'Domain' in row:
+                    domain = row['Domain']
+                    vt_res = row.get('VirusTotal_Result', '').strip().lower()
+                    gsb_res = row.get('SafeBrowsing_Result', '').strip().lower()
+                    heuristics = row.get('Is_Phishing_Heuristics', '').strip().lower() == 'true'
+                    
+                    if vt_res == 'true' or gsb_res == 'true':
+                        is_phishing = True
+                    elif vt_res == 'false' or gsb_res == 'false':
+                        is_phishing = False
+                    else:
+                        is_phishing = heuristics
+                        
+                    X.append(extractor.extract_features(domain))
+                    y.append(1 if is_phishing else 0)
+    except Exception as e:
+        logger.error(f"Error parsing CSV: {e}")
+        
+    if not X or len(set(y)) < 2:
+        logger.warning("Failed to load valid CSV data. Falling back to dummy data.")
+        return load_dummy_data()
+        
+    return np.array(X), np.array(y)
 
 def train_model(dataset_source, csv_path=None):
     if dataset_source == 'dummy':

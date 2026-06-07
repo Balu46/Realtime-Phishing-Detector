@@ -38,14 +38,17 @@ class CertstreamListener:
             return
 
         if message.get("message_type") == "certificate_update":
-            all_domains = message["data"]["leaf_cert"]["all_domains"]
+            all_domains = message.get("data", {}).get("leaf_cert", {}).get("all_domains", [])
             for domain in all_domains:
                 # Basic normalization: lowercasing and stripping wildcard prefixes
                 clean_domain = domain.lower().strip()
                 if clean_domain.startswith("*."):
                     clean_domain = clean_domain[2:]
                 
-                self.domain_queue.put(clean_domain)
+                try:
+                    self.domain_queue.put(clean_domain, block=False)
+                except queue.Full:
+                    logger.debug("Domain queue is full, dropping domain.")
 
     def start(self) -> None:
         """Starts the certstream listener in a background thread."""

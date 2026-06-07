@@ -62,5 +62,6 @@ class SafeBrowsingClient:
             return False
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error checking Google Safe Browsing for {domain}: {e}")
+            logger.error(f"Error checking Google Safe Browsing for {domain}")
+            logger.debug(f"GSB Error details: {str(e).replace(self.api_key, '***')}")
             return None

@@ -26,6 +26,3 @@ class Config:
         "amazon"
     ]
 
-    # Thresholds for heuristics and ML
-    LEVENSHTEIN_THRESHOLD: int = 3
-    ENTROPY_THRESHOLD: float = 4.0

@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Set, List
 try:
     import dnstwist
@@ -64,7 +65,7 @@ class HeuristicsAnalyzer:
         """
         # 1. Direct keyword match (e.g., paypal-login.com)
         for brand in self.target_brands:
-            if brand in domain:
+            if re.search(rf'(^|[^a-zA-Z0-9]){brand}([^a-zA-Z0-9]|$)', domain):
                 return True
 
         # 2. Typosquatting match
