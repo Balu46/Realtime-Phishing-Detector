@@ -73,7 +73,9 @@ def main():
     csv_file = None
     
     import concurrent.futures
+    import threading
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=5)
+    csv_lock = threading.Lock()
 
     processed_count = 0
     try:
@@ -96,8 +98,6 @@ def main():
             # Default state for CSV logging
             heuristics_match = False
             ml_match = False
-            vt_res = None
-            gsb_res = None
                 
             # --- Phase 1: Heuristics & Typosquatting ---
             if heuristics.is_phishing_heuristic(domain):
@@ -115,23 +115,34 @@ def main():
                     
                     # --- Phase 3: Threat Intelligence Validation ---
                     # Execute asynchronously to avoid blocking the main domain ingestion loop
-                    def check_threat_intel(dom):
+                    def check_threat_intel(dom, h_match, m_match):
                         vt_res = vt_client.check_domain(dom)
+                        vt_str = "True" if vt_res is True else ("False" if vt_res is False else "")
                         if vt_res is True:
                             logger.critical(f"💀 CONFIRMED MALICIOUS on VirusTotal: {dom}")
                         elif vt_res is False:
                             logger.info(f"VirusTotal considers it safe (for now): {dom}")
                             
                         gsb_res = gsb_client.check_domain(dom)
+                        gsb_str = "True" if gsb_res is True else ("False" if gsb_res is False else "")
                         if gsb_res is True:
                             logger.critical(f"💀 CONFIRMED MALICIOUS on Google Safe Browsing: {dom}")
 
-                    executor.submit(check_threat_intel, domain)
+                        # Write to CSV when the check finishes
+                        ts = datetime.now().isoformat()
+                        with csv_lock:
+                            csv_writer.writerow([ts, dom, h_match, m_match, vt_str, gsb_str])
+                            csv_file.flush()
+
+                    executor.submit(check_threat_intel, domain, heuristics_match, ml_match)
+                    domain_queue.task_done()
+                    continue  # Skip the default CSV write
             
-            # Log every single domain to CSV (without synchronous VT/GSB results to avoid blocking)
+            # Log every single safe/non-ML domain to CSV immediately
             timestamp = datetime.now().isoformat()
-            csv_writer.writerow([timestamp, domain, heuristics_match, ml_match, "", ""])
-            csv_file.flush() # Ensure it's saved to disk immediately
+            with csv_lock:
+                csv_writer.writerow([timestamp, domain, heuristics_match, ml_match, "", ""])
+                csv_file.flush() # Ensure it's saved to disk immediately
                     
             domain_queue.task_done()
 
